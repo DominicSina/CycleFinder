@@ -94,9 +94,9 @@ public class SampleHandler extends AbstractHandler {
 		}
 		
 		CycleDisplayer cycleView;
-		try {
+		try{
 			ConsolePlugin plugin = ConsolePlugin.getDefault();
-			cycleView=(CycleDisplayer) plugin.getWorkbench().getActiveWorkbenchWindow().getActivePage().showView("CyclePlugIn.view");
+			cycleView=(CycleDisplayer)plugin.getWorkbench().getActiveWorkbenchWindow().getActivePage().showView("CyclePlugIn.view");
 		} catch (PartInitException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -123,16 +123,7 @@ public class SampleHandler extends AbstractHandler {
 		for(Dependancy dep : dependencies){
 			edges.add(new TarjanEdge<IPackageFragment>(map.get(dep.getStart()), map.get(dep.getEnd())));
 		}
-		/*
-		for (TarjanEdge<IPackageFragment> edge : edges){
-			if(!nodes.contains(edge.getStart())){
-				nodes.add(edge.getStart());
-			}
-			if(!nodes.contains(edge.getEnd())){
-				nodes.add(edge.getEnd());
-			}
-		}
-	*/
+		
 		LinkedList<LinkedList<TarjanNode<IPackageFragment>>> strongConnections=tarjan(nodes, edges);
 		String sCon=new String();
 		for(LinkedList<TarjanNode<IPackageFragment>> connections : strongConnections){
@@ -142,12 +133,75 @@ public class SampleHandler extends AbstractHandler {
 			sCon+=" || ";
 		}
 		
+		LinkedList<LinkedList<TarjanNode<IPackageFragment>>> cycles=new LinkedList<LinkedList<TarjanNode<IPackageFragment>>>();
+		for(LinkedList<TarjanNode<IPackageFragment>> strongComp : strongConnections){
+			
+			LinkedList<LinkedList<TarjanNode<IPackageFragment>>> result=findCyclesInStrConComponent(strongComp, edges);
+			cycles.addAll(result);
+		}
+		
+		String cycleString=new String();
+		for(LinkedList<TarjanNode<IPackageFragment>> cycle : cycles){
+			for(TarjanNode<IPackageFragment> node: cycle){
+				cycleString+=node.getNode().getElementName() +" - ";
+			}
+			cycleString+="\n";
+		}
+		
 		cycleView.display("Projects:"+projectNames+"\n"
 				+" Packages:"+packageNames+"\n"
 				+" Dependencies: "+depStr+"\n"
-				+" StrongCons: "+sCon);
+				+" StrongCons: "+sCon+"\n"
+				+" Cycles: "+cycleString);
 		
 		return null;	
+	}
+	
+	public LinkedList<LinkedList<TarjanNode<IPackageFragment>>> findCyclesInStrConComponent(LinkedList<TarjanNode<IPackageFragment>> nodes, LinkedList<TarjanEdge<IPackageFragment>> edges){
+		assert nodes!=null;
+		assert nodes.size()>0;
+		assert edges!=null;
+		
+		LinkedList<LinkedList<TarjanNode<IPackageFragment>>> result=new LinkedList<LinkedList<TarjanNode<IPackageFragment>>>();
+		for (TarjanNode<IPackageFragment> node : nodes){
+
+			findCylce(result, node, node, new LinkedList<TarjanNode<IPackageFragment>>(), edges, 0, nodes.size());
+		}
+		return result;
+	}
+	
+	public void findCylce(LinkedList<LinkedList<TarjanNode<IPackageFragment>>> result, TarjanNode<IPackageFragment> startingNode, TarjanNode<IPackageFragment> currentNode, LinkedList<TarjanNode<IPackageFragment>> visitedNodes, LinkedList<TarjanEdge<IPackageFragment>> edges, int deapth, int maxDeapth){
+		assert startingNode!=null;
+		assert visitedNodes!=null;
+		assert result!=null;
+		
+		if (currentNode==startingNode&&visitedNodes.size()>0){
+			boolean foundMatchingCycle=false;
+			for(LinkedList<TarjanNode<IPackageFragment>> detectedCycle : result){
+				if (detectedCycle.containsAll(visitedNodes)){
+					foundMatchingCycle=true;
+				}
+			}
+			if(foundMatchingCycle==false){
+				result.add(visitedNodes);
+			}
+			//return visitedNodes;
+		}
+		else if(visitedNodes.contains(currentNode)){
+			//return null;
+		}
+		else if(deapth>=maxDeapth){
+			//return null;
+		}
+		else{
+			LinkedList<TarjanEdge<IPackageFragment>> outgoingEdges=findEdgesStartingWithNode(currentNode, edges);
+			for(TarjanEdge<IPackageFragment> edge : outgoingEdges){
+				LinkedList<TarjanNode<IPackageFragment>> visitedNodesNew=new LinkedList<TarjanNode<IPackageFragment>>(visitedNodes);
+				visitedNodesNew.add(currentNode);
+				findCylce(result, startingNode, edge.getEnd(), visitedNodesNew, edges, deapth+1, maxDeapth);
+			}
+		}
+		
 	}
 	
 	public LinkedList<LinkedList<TarjanNode<IPackageFragment>>> tarjan(LinkedList<TarjanNode<IPackageFragment>> nodes, LinkedList<TarjanEdge<IPackageFragment>> edges){
@@ -170,6 +224,20 @@ public class SampleHandler extends AbstractHandler {
 		return resultingConnections;
 	}
 	
+	private LinkedList<TarjanEdge<IPackageFragment>> findEdgesStartingWithNode(TarjanNode<IPackageFragment> node, LinkedList<TarjanEdge<IPackageFragment>> edges){
+		assert node!=null;
+		assert edges!=null;
+		
+		LinkedList<TarjanEdge<IPackageFragment>> startWithNode=new LinkedList<TarjanEdge<IPackageFragment>>(); 
+		for (TarjanEdge<IPackageFragment> edge : edges){
+			if(edge.getStart().equals(node)){
+				startWithNode.add(edge);
+			}
+		}
+		
+		return startWithNode;
+	}
+	
 	private LinkedList<TarjanNode<IPackageFragment>> strongConnect(TarjanNode<IPackageFragment> node, LinkedList<TarjanEdge<IPackageFragment>> edges, Integer index, Stack<TarjanNode<IPackageFragment>> s){
 		assert node!=null;
 		
@@ -178,12 +246,7 @@ public class SampleHandler extends AbstractHandler {
 		index++;
 		s.push(node);
 		
-		LinkedList<TarjanEdge<IPackageFragment>> startWithNode=new LinkedList<TarjanEdge<IPackageFragment>>(); 
-		for (TarjanEdge<IPackageFragment> edge : edges){
-			if(edge.getStart().equals(node)){
-				startWithNode.add(edge);
-			}
-		}
+		LinkedList<TarjanEdge<IPackageFragment>> startWithNode=findEdgesStartingWithNode(node, edges);
 		
 		for (TarjanEdge<IPackageFragment> edge : startWithNode){
 			if(!edge.getEnd().isIndexSet()){
