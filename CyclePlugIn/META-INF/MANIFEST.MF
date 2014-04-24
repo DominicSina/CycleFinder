@@ -1,0 +1,15 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: CyclePlugIn
+Bundle-SymbolicName: CyclePlugIn;singleton:=true
+Bundle-Version: 1.0.0.qualifier
+Bundle-Activator: cycleplugin.Activator
+Require-Bundle: org.eclipse.ui,
+ org.eclipse.core.runtime,
+ org.eclipse.jdt;bundle-version="3.9.0",
+ org.eclipse.core.resources;bundle-version="3.8.100",
+ org.eclipse.jdt.core;bundle-version="3.9.0",
+ org.eclipse.ui.console;bundle-version="3.5.200",
+ org.eclipse.ui.views;bundle-version="3.6.100"
+Bundle-RequiredExecutionEnvironment: JavaSE-1.7
+Bundle-ActivationPolicy: lazy

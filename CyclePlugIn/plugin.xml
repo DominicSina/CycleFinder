@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+
+   <extension
+         point="org.eclipse.ui.commands">
+      <category
+            name="Sample Category"
+            id="CyclePlugIn.commands.category">
+      </category>
+      <command
+            name="Sample Command"
+            categoryId="CyclePlugIn.commands.category"
+            id="CyclePlugIn.commands.sampleCommand">
+      </command>
+   </extension>
+   
+   <extension
+         point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="popup:org.eclipse.jdt.ui.PackageExplorer">
+         <command
+               commandId="CyclePlugIn.commands.sampleCommand"
+               label="CycleDetection"
+               style="push">
+            <visibleWhen
+                  checkEnabled="false">
+               <with
+                     variable="activeMenuSelection">
+                  <iterate
+                        ifEmpty="false"
+                        operator="or">
+                     <adapt
+                           type="org.eclipse.jdt.core.IJavaProject">
+                     </adapt>
+                  </iterate>
+               </with>
+            </visibleWhen>
+         </command>
+      </menuContribution>
+   </extension>
+   
+   
+   <extension
+         point="org.eclipse.ui.handlers">
+      <handler
+            commandId="CyclePlugIn.commands.sampleCommand"
+            class="cycleplugin.handlers.SampleHandler">
+      </handler>
+   </extension>
+   <extension
+         point="org.eclipse.ui.views">
+      <category
+            id="CyclePlugIn.cat"
+            name="CyclePlugIn">
+      </category>
+      <view
+            category="CyclePlugIn.cat"
+            class="cycleplugin.CycleDisplayer"
+            id="CyclePlugIn.view"
+            name="CyclePugInViewName2"
+            restorable="true">
+      </view>
+   </extension>
+
+</plugin>
