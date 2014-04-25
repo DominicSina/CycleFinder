@@ -63,7 +63,7 @@ public class StronglyConnectedComponent {
 		if (currentPackage==startingPackage&&visitedPackages.size()>0){
 			boolean foundMatchingCycle=false;
 			for(LinkedList<IPackageFragment> detectedCycle : result){
-				if (detectedCycle.containsAll(visitedPackages)){
+				if (detectedCycle.containsAll(visitedPackages)&&visitedPackages.containsAll(detectedCycle)){
 					foundMatchingCycle=true;
 				}
 			}
