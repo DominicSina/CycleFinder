@@ -9,8 +9,8 @@ import org.eclipse.jdt.core.IPackageFragment;
 
 public class LookUp implements LookUpInterface {
 
-	HashMap<IJavaElement, IPackageFragment> lookup;
-	LinkedList<IPackageFragment> packages;
+	protected HashMap<IJavaElement, IPackageFragment> lookup;
+	protected LinkedList<IPackageFragment> packages;
 	
 	public LookUp(){
 		lookup=new HashMap<IJavaElement, IPackageFragment>();
@@ -37,7 +37,7 @@ public class LookUp implements LookUpInterface {
 	}
 
 	@Override
-	public LinkedList<IJavaElement> getAllMethods() {
+	public LinkedList<IJavaElement> getAllJElements() {
 		return new LinkedList<IJavaElement>(lookup.keySet());
 	}
 

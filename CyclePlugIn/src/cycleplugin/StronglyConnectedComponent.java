@@ -44,7 +44,7 @@ public class StronglyConnectedComponent {
 		
 		LinkedList<LinkedList<IPackageFragment>> cyclesFound=new LinkedList<LinkedList<IPackageFragment>>();
 		for (IPackageFragment pack : packages){	
-			findCylce(cyclesFound, pack, pack, new LinkedList<IPackageFragment>(), dependencies, 0, packages.size());
+			findCycle(cyclesFound, pack, pack, new LinkedList<IPackageFragment>(), dependencies, 0, packages.size());
 		}
 		
 		LinkedList<Cycle> result=new LinkedList<Cycle>();
@@ -55,7 +55,7 @@ public class StronglyConnectedComponent {
 		return result;
 	}
 	
-	public void findCylce(LinkedList<LinkedList<IPackageFragment>> result, IPackageFragment startingPackage, IPackageFragment currentPackage, LinkedList<IPackageFragment> visitedPackages, LinkedList<Dependency> dependencies, int deapth, int maxDeapth){
+	public void findCycle(LinkedList<LinkedList<IPackageFragment>> result, IPackageFragment startingPackage, IPackageFragment currentPackage, LinkedList<IPackageFragment> visitedPackages, LinkedList<Dependency> dependencies, int deapth, int maxDeapth){
 		assert startingPackage!=null;
 		assert visitedPackages!=null;
 		assert result!=null;
@@ -83,10 +83,9 @@ public class StronglyConnectedComponent {
 			for(Dependency edge : outgoingEdges){
 				LinkedList<IPackageFragment> visitedNodesNew=new LinkedList<IPackageFragment>(visitedPackages);
 				visitedNodesNew.add(currentPackage);
-				findCylce(result, startingPackage, edge.getEnd(), visitedNodesNew, dependencies, deapth+1, maxDeapth);
+				findCycle(result, startingPackage, edge.getEnd(), visitedNodesNew, dependencies, deapth+1, maxDeapth);
 			}
 		}
-		
 	}
 	
 	private LinkedList<Dependency> findDependenciesStartingWithPackage(IPackageFragment pack, LinkedList<Dependency> allDependencies){

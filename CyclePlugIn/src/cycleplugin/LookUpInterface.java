@@ -11,7 +11,7 @@ public interface LookUpInterface {
 
 	public IPackageFragment getPackage(IJavaElement jElement);
 	
-	public LinkedList<IJavaElement> getAllMethods();
+	public LinkedList<IJavaElement> getAllJElements();
 	
 	public LinkedList<IPackageFragment> getPackages();
 	

@@ -2,29 +2,39 @@ package cycleplugin;
 
 import java.util.LinkedList;
 
-import javax.swing.CellEditor;
-
-import org.eclipse.jface.viewers.ArrayContentProvider;
-import org.eclipse.jface.viewers.CheckboxCellEditor;
+import org.eclipse.ui.editors.text.*;
+import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.IJavaElement;
+import org.eclipse.jdt.core.ISourceRange;
+import org.eclipse.jdt.core.ISourceReference;
+import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.core.SourceRange;
+import org.eclipse.jdt.core.IBuffer.ITextEditCapability;
+import org.eclipse.jdt.core.search.IJavaSearchConstants;
+import org.eclipse.jdt.internal.core.CompilationUnit;
+import org.eclipse.jdt.ui.JavaUI;
 import org.eclipse.jface.viewers.ColumnLabelProvider;
-import org.eclipse.jface.viewers.ComboBoxCellEditor;
-import org.eclipse.jface.viewers.TableViewer;
-import org.eclipse.jface.viewers.TableViewerColumn;
-import org.eclipse.jface.viewers.TextCellEditor;
 import org.eclipse.jface.viewers.TreeNode;
 import org.eclipse.jface.viewers.TreeNodeContentProvider;
 import org.eclipse.jface.viewers.TreeViewer;
 import org.eclipse.jface.viewers.TreeViewerColumn;
-import org.eclipse.swt.events.SelectionAdapter;
-import org.eclipse.swt.events.SelectionEvent;
-import org.eclipse.swt.events.VerifyListener;
-import org.eclipse.swt.layout.GridData;
-import org.eclipse.swt.widgets.*;
 import org.eclipse.swt.SWT;
-import org.eclipse.ui.IPageLayout;
-import org.eclipse.ui.console.IConsoleConstants;
-import org.eclipse.ui.internal.console.ConsoleView;
+import org.eclipse.swt.events.MouseEvent;
+import org.eclipse.swt.events.MouseListener;
+import org.eclipse.swt.events.SelectionEvent;
+import org.eclipse.swt.events.SelectionListener;
+import org.eclipse.swt.layout.GridData;
+import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Text;
+import org.eclipse.swt.widgets.Tree;
+import org.eclipse.swt.widgets.TreeColumn;
+import org.eclipse.swt.widgets.TreeItem;
+import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.part.ViewPart;
+import org.eclipse.ui.texteditor.ITextEditor;
+
+import cycleplugin.SearchRequestorMethodDeclarations.MatchInformation;
 
 public class CycleDisplayer extends ViewPart {
 
@@ -47,7 +57,46 @@ public class CycleDisplayer extends ViewPart {
 		tree=treeViewer.getTree();
 		tree.setHeaderVisible(true);
 		tree.setLinesVisible(true);
-
+		
+		tree.addMouseListener(new MouseListener() {
+			@Override
+			public void mouseUp(MouseEvent e) {
+				// TODO Auto-generated method stub
+				
+			}
+			
+			@Override
+			public void mouseDown(MouseEvent e) {
+				// TODO Auto-generated method stub
+				
+			}
+			
+			@Override
+			public void mouseDoubleClick(MouseEvent e) {
+				TreeItem[] selectedItems=tree.getSelection();
+				if (selectedItems.length==1){
+					TreeNode treeN=(TreeNode)selectedItems[0].getData();
+					if(treeN.getValue() instanceof MatchInformation){
+						MatchInformation matchInfo=(MatchInformation)treeN.getValue();
+						ICompilationUnit compUnit=matchInfo.compilationUnit;
+						try {
+							IEditorPart editPart=JavaUI.openInEditor(compUnit);
+							JavaUI.revealInEditor(editPart, (IJavaElement)matchInfo.compilationUnit);
+							ITextEditor editor=(ITextEditor)editPart;
+							editor.selectAndReveal(matchInfo.offset, matchInfo.length);
+							//JavaUI.revealInEditor(editPart, matchInfo.compilationUnit.codeSelect(matchInfo.offset, matchInfo.length)[1]);
+							
+						} catch (PartInitException e1) {
+							// TODO Auto-generated catch block
+							e1.printStackTrace();
+						} catch (JavaModelException e1) {
+							// TODO Auto-generated catch block
+							e1.printStackTrace();
+						}
+					}
+				}
+			}
+		});
 		
 		treeViewer.setContentProvider(new TreeNodeContentProvider());
 				
@@ -115,7 +164,32 @@ public class CycleDisplayer extends ViewPart {
 	    locationVCol.setLabelProvider(new ColumnLabelProvider() {
 		  @Override
 		  public String getText(Object element) {
-		    return "ABC";
+			  TreeNode node=(TreeNode)element;
+			  if(node.getValue() instanceof MatchInformation){
+				  MatchInformation info=(MatchInformation)node.getValue();
+				  return info.resource.getName();
+			  }
+			  return null;
+		    
+		  }
+		});
+	    
+	    TreeViewerColumn lineVCol = new TreeViewerColumn(treeViewer, SWT.NONE);
+		TreeColumn lineCol = descriptionVCol.getColumn();
+		lineCol.setResizable(true);
+		lineCol.setMoveable(true);
+
+		lineVCol.getColumn().setWidth(200);
+		lineVCol.getColumn().setText("Line");
+		lineVCol.setLabelProvider(new ColumnLabelProvider() {
+		  @Override
+		  public String getText(Object element) {
+			  TreeNode node=(TreeNode)element;
+			  if(node.getValue() instanceof MatchInformation){
+				  MatchInformation info=(MatchInformation)node.getValue();
+				  return ""+info.lineNumber;
+			  }
+			  return null;
 		  }
 		});
 	}
@@ -150,6 +224,17 @@ public class CycleDisplayer extends ViewPart {
 						depNodes[i]=new TreeNode(dependencies.get(i));
 					}
 					cycleNode.setChildren(depNodes);
+					
+					for(TreeNode depNode : cycleNode.getChildren()){
+						Searcher searcher=new Searcher((Dependency)depNode.getValue());
+						LinkedList<MatchInformation> matchInfos=searcher.searchDetailedDependencies(IJavaSearchConstants.REFERENCES);
+						
+						TreeNode[] infoNodes=new TreeNode[matchInfos.size()];
+						for(int i=0; i<matchInfos.size();i++){
+							infoNodes[i]=new TreeNode(matchInfos.get(i));
+						}
+						depNode.setChildren(infoNodes);
+					}
 				}
 			}
 		}
