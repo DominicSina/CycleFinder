@@ -43,6 +43,11 @@ public class TarjanNode<T> {
 	}
 	
 	@Override
+	public String toString(){
+		return "TNode "+node.toString();
+	}
+	
+	@Override
 	public boolean equals(Object a){
 		if ( this == a ) return true;
 		if ( !(a instanceof TarjanNode<?>) ) return false;

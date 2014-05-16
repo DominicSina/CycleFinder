@@ -13,6 +13,11 @@ public class TarjanEdge<T> {
 		this.end=end;
 	}
 	
+	@Override
+	public String toString(){
+		return "TEdge "+start.toString()+"-->"+end.toString();
+	}
+	
 	public TarjanNode<T> getStart(){
 		return start;
 	}

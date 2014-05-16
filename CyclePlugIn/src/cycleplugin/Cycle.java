@@ -24,11 +24,12 @@ public class Cycle {
 	
 	public String getPackageNames(){
 		//get packagenames
-		String packageNames=new String();
-		for(IPackageFragment jEle: packages){
-			packageNames+=" ;"+((IPackageFragment)jEle).getElementName();
+		String packageNames="{";
+		packageNames+=packages.get(0).getElementName();
+		for(int i=1; i<packages.size();i++){
+			packageNames+=", "+packages.get(i).getElementName();
 		}
-		
+		packageNames+="}";
 		return packageNames;
 	}
 	

@@ -40,7 +40,7 @@ import cycleplugin.Dependency;
 import cycleplugin.LookUp;
 import cycleplugin.LookUpInterface;
 import cycleplugin.LookUpType;
-import cycleplugin.SearchRequestorMethodDeclarations;
+import cycleplugin.SearchRequestorMatchInformation;
 import cycleplugin.Searcher;
 import cycleplugin.StronglyConnectedComponent;
 import cycleplugin.SearchRequestorMatchFound;

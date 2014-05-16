@@ -58,10 +58,15 @@ public class TarjanGraph {
 		
 		for(TarjanNode<IPackageFragment> node : nodes){
 			if(!node.isIndexSet()){
-				LinkedList<TarjanNode<IPackageFragment>> connec=strongConnect(node, index, s);
-				if (connec!=null){
-					resultingConnections.add(connec);
-				}
+				strongConnect(resultingConnections, node, index, s);
+			}
+		}
+		
+		//filter all components with only one element out
+		for(int i=0; i<resultingConnections.size(); i++){
+			if(resultingConnections.get(i).size()<=1){
+				resultingConnections.remove(i);
+				i--;
 			}
 		}
 		
@@ -73,7 +78,7 @@ public class TarjanGraph {
 		return result;
 	}
 	
-	private LinkedList<TarjanNode<IPackageFragment>> strongConnect(TarjanNode<IPackageFragment> node, Integer index, Stack<TarjanNode<IPackageFragment>> stack){
+	private void strongConnect(LinkedList<LinkedList<TarjanNode<IPackageFragment>>> result,TarjanNode<IPackageFragment> node, Integer index, Stack<TarjanNode<IPackageFragment>> stack){
 		assert node!=null;
 		
 		node.setIndex(index);
@@ -85,7 +90,7 @@ public class TarjanGraph {
 		
 		for (TarjanEdge<IPackageFragment> edge : startWithNode){
 			if(!edge.getEnd().isIndexSet()){
-				strongConnect(edge.getEnd(), index, stack);
+				strongConnect(result, edge.getEnd(), index, stack);
 				edge.getStart().setlowestConnecedIndex(Math.min(edge.getStart().getlowestConnecedIndex(), edge.getEnd().getlowestConnecedIndex()));
 			}
 			else if(stack.contains(edge.getEnd())){
@@ -102,9 +107,8 @@ public class TarjanGraph {
 				
 			}while(toAdd!=node);
 			
-			return connectedComponent;
+			result.add(connectedComponent);
 		}
-		return null;
 	}
 	
 }

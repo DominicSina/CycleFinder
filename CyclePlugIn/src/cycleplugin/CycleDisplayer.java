@@ -1,5 +1,7 @@
 package cycleplugin;
 
+import java.math.MathContext;
+import java.util.HashMap;
 import java.util.LinkedList;
 
 import org.eclipse.ui.editors.text.*;
@@ -34,7 +36,7 @@ import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.part.ViewPart;
 import org.eclipse.ui.texteditor.ITextEditor;
 
-import cycleplugin.SearchRequestorMethodDeclarations.MatchInformation;
+import cycleplugin.SearchRequestorMatchInformation.MatchInformation;
 
 public class CycleDisplayer extends ViewPart {
 
@@ -42,6 +44,7 @@ public class CycleDisplayer extends ViewPart {
 	private Text text;
 	private TreeViewer treeViewer;
 	private Tree tree;
+	private HashMap<Dependency, LinkedList<MatchInformation>> matchInfo=new HashMap<Dependency, LinkedList<MatchInformation>>();
 	
 	public CycleDisplayer() {
 		super();
@@ -125,55 +128,84 @@ public class CycleDisplayer extends ViewPart {
 		descriptionVCol.setLabelProvider(new ColumnLabelProvider() {
 		  @Override
 		  public String getText(Object element) {
-		    return ((TreeNode)element).getValue().toString();
+			  TreeNode node=(TreeNode)element;
+			  Object nodeElement=node.getValue();
+			  String components=new String();
+			  if(nodeElement instanceof StronglyConnectedComponent){
+				  components=((StronglyConnectedComponent)nodeElement).getPackageNames();
+			  }
+			  else if(nodeElement instanceof Cycle){
+				  components=((Cycle)nodeElement).getPackageNames();
+			  }
+			  
+			  String childrenCount=new String();
+			  if(node.getChildren()!=null){
+				  childrenCount="("+node.getChildren().length+")";
+			  }
+			  
+			  if(nodeElement instanceof ICompilationUnit)
+				  return ((ICompilationUnit)nodeElement).getElementName();
+			  
+			  return nodeElement.toString()+components;
 		  }
 		});
 		
-		TreeViewerColumn packagesVCol = new TreeViewerColumn(treeViewer, SWT.NONE);
-		TreeColumn packagesCol = descriptionVCol.getColumn();
-		packagesCol.setResizable(true);
-		packagesCol.setMoveable(true);
+		TreeViewerColumn fromVCol = new TreeViewerColumn(treeViewer, SWT.NONE);
+		TreeColumn fromCol = fromVCol.getColumn();
+		fromCol.setResizable(true);
+		fromCol.setMoveable(true);
 	    
-	    packagesVCol.getColumn().setWidth(200);
-	    packagesVCol.getColumn().setText("Packages");
-	    packagesVCol.setLabelProvider(new ColumnLabelProvider() {
+	    fromVCol.getColumn().setWidth(200);
+	    fromVCol.getColumn().setText("From");
+	    fromVCol.setLabelProvider(new ColumnLabelProvider() {
 		  @Override
 		  public String getText(Object element) {
 			  TreeNode node=(TreeNode)element;
-			  if(node.getValue() instanceof Cycle){
-				  return ((Cycle)node.getValue()).getPackageNames();
+			  Object nodeElement=node.getValue();
+			  
+			  /*if(nodeElement instanceof Cycle){
+				  return ((Cycle)nodeElement).getPackageNames();
 			  }
 			  else if(node.getValue() instanceof StronglyConnectedComponent){
-				  return ((StronglyConnectedComponent)node.getValue()).getPackageNames();
+				  return ((StronglyConnectedComponent)nodeElement).getPackageNames();
+			  }*/
+			  if(node.getValue() instanceof Dependency){
+				  Dependency dep=(Dependency)nodeElement;
+				  return ""+dep.getStart().getElementName();
 			  }
-			  else if(node.getValue() instanceof Dependency){
-				  Dependency dep=(Dependency)node.getValue();
-				  return ""+dep.getStart().getElementName()+" --> "+dep.getEnd().getElementName();
+			  else if(node.getValue() instanceof MatchInformation){
+				  MatchInformation matchInfo=(MatchInformation)nodeElement;
+				  return ""+matchInfo.fromDescription;
 			  }
 			  return null;
 		  }
 		});
 
-	    TreeViewerColumn locationVCol = new TreeViewerColumn(treeViewer, SWT.NONE);
-		TreeColumn locationCol = descriptionVCol.getColumn();
-		locationCol.setResizable(true);
-		locationCol.setMoveable(true);
+	    TreeViewerColumn toVCol = new TreeViewerColumn(treeViewer, SWT.NONE);
+		TreeColumn toCol = toVCol.getColumn();
+		toCol.setResizable(true);
+		toCol.setMoveable(true);
 
-	    locationVCol.getColumn().setWidth(200);
-	    locationVCol.getColumn().setText("Location");
-	    locationVCol.setLabelProvider(new ColumnLabelProvider() {
+	    toVCol.getColumn().setWidth(200);
+	    toVCol.getColumn().setText("To");
+	    toVCol.setLabelProvider(new ColumnLabelProvider() {
 		  @Override
 		  public String getText(Object element) {
 			  TreeNode node=(TreeNode)element;
-			  if(node.getValue() instanceof MatchInformation){
-				  MatchInformation info=(MatchInformation)node.getValue();
-				  return info.resource.getName();
+			  Object nodeElement=node.getValue();
+			  
+			  if(node.getValue() instanceof Dependency){
+				  Dependency dep=(Dependency)nodeElement;
+				  return ""+dep.getEnd().getElementName();
+			  }
+			  else if(node.getValue() instanceof MatchInformation){
+				  MatchInformation matchInfo=(MatchInformation)nodeElement;
+				  return ""+matchInfo.toDescription;
 			  }
 			  return null;
-		    
 		  }
 		});
-	    
+	    /*
 	    TreeViewerColumn lineVCol = new TreeViewerColumn(treeViewer, SWT.NONE);
 		TreeColumn lineCol = descriptionVCol.getColumn();
 		lineCol.setResizable(true);
@@ -191,7 +223,7 @@ public class CycleDisplayer extends ViewPart {
 			  }
 			  return null;
 		  }
-		});
+		});*/
 	}
 	
 	
@@ -226,14 +258,55 @@ public class CycleDisplayer extends ViewPart {
 					cycleNode.setChildren(depNodes);
 					
 					for(TreeNode depNode : cycleNode.getChildren()){
-						Searcher searcher=new Searcher((Dependency)depNode.getValue());
-						LinkedList<MatchInformation> matchInfos=searcher.searchDetailedDependencies(IJavaSearchConstants.REFERENCES);
 						
-						TreeNode[] infoNodes=new TreeNode[matchInfos.size()];
-						for(int i=0; i<matchInfos.size();i++){
-							infoNodes[i]=new TreeNode(matchInfos.get(i));
+						////perform detailed search on all package dependencies
+						Dependency dep=(Dependency)depNode.getValue();
+						LinkedList<MatchInformation> matchInfos;
+						//avoid doing the same searches multiple times
+						if(matchInfo.containsKey(dep)){
+							matchInfos= new LinkedList<MatchInformation>(matchInfo.get(dep));
 						}
-						depNode.setChildren(infoNodes);
+						else{
+							Searcher searcher=new Searcher(dep);
+							matchInfos=searcher.searchAllDetailedDependencies();
+							matchInfo.put(dep, new LinkedList<MatchInformation>(matchInfos));
+						}
+						
+						
+						////group the matches by their classes
+						//collect all classes
+						LinkedList<ICompilationUnit> classes=new LinkedList<ICompilationUnit>();
+						for(MatchInformation matchInfo : matchInfos){
+							if(!classes.contains(matchInfo.compilationUnit)){
+								classes.add(matchInfo.compilationUnit);
+							}
+						}
+						
+						TreeNode[] classNodes=new TreeNode[classes.size()];
+						for(int i=0; i<classes.size();i++){
+							classNodes[i]=new TreeNode(classes.get(i));
+						}
+						depNode.setChildren(classNodes);
+						
+						//determine which matches were found in which class
+						for(TreeNode classNode:classNodes){
+							LinkedList<MatchInformation> matchesInClass=new LinkedList<MatchInformation>();
+							
+							for(int i=0;i<matchInfos.size();i++){
+								MatchInformation matchInfo=matchInfos.get(i);
+								if(matchInfo.compilationUnit.equals((classNode.getValue()))){
+									matchesInClass.add(matchInfo);
+									matchInfos.remove(matchInfo);
+									i--;
+								}	
+							}
+							
+							TreeNode[] infoNodes=new TreeNode[matchesInClass.size()];
+							for(int i=0; i<matchesInClass.size();i++){
+								infoNodes[i]=new TreeNode(matchesInClass.get(i));
+							}
+							classNode.setChildren(infoNodes);
+						}
 					}
 				}
 			}

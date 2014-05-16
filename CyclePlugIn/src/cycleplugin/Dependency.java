@@ -31,7 +31,7 @@ public class Dependency{
 		if (getClass() != obj.getClass())
 			return false;
 		final Dependency other = (Dependency) obj;
-		if (start!=other.getStart() || end!=other.getEnd()){
+		if ((!start.equals(other.getStart())) || (!end.equals(other.getEnd()))){
 			return false;
 		}
 		return true;

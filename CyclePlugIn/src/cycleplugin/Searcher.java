@@ -3,6 +3,8 @@ package cycleplugin;
 import java.util.Arrays;
 import java.util.LinkedList;
 
+import javax.naming.directory.SearchControls;
+
 import org.eclipse.core.commands.ExecutionException;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.jdt.core.IJavaElement;
@@ -10,37 +12,45 @@ import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.IPackageFragment;
 import org.eclipse.jdt.core.IPackageFragmentRoot;
 import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.core.search.IJavaSearchConstants;
 import org.eclipse.jdt.core.search.IJavaSearchScope;
 import org.eclipse.jdt.core.search.SearchEngine;
 import org.eclipse.jdt.core.search.SearchParticipant;
 import org.eclipse.jdt.core.search.SearchPattern;
+import org.eclipse.jdt.internal.ui.IJavaStatusConstants;
 
-import cycleplugin.SearchRequestorMethodDeclarations.MatchInformation;
+import cycleplugin.SearchRequestorMatchInformation.MatchInformation;
 
 public class Searcher {
 	
 	private LinkedList<IPackageFragment> packagesToSearch;
+	private LinkedList<IPackageFragment> packagesWithJElementsToSearchFor;
 	private SearchEngine JDTSearchProvider=new SearchEngine();
 	
 	public Searcher(IJavaProject jproject){
 		assert jproject!=null;
 		
-		IPackageFragmentRoot folderToSearch=getSrcFolder(jproject);
-
-		LinkedList<IPackageFragment> packages=getPackageFragments(folderToSearch);//TODO not sure if all children of IPackageFragmentRoots are IPackageFragments
+		LinkedList<IPackageFragmentRoot> foldersToSearch=getSrcFolders(jproject);
+		LinkedList<IPackageFragment> packagesToSearch=new LinkedList<IPackageFragment>();
+		for(IPackageFragmentRoot folderToSearch : foldersToSearch){
+			packagesToSearch.addAll(getPackageFragments(folderToSearch));//TODO not sure if all children of IPackageFragmentRoots are IPackageFragments
+		}
 		
-		packagesToSearch=packages;
+		this.packagesToSearch=packagesToSearch;
 	}
 	
 	public Searcher(Dependency dependency){
 		assert dependency!=null;
 		
 		LinkedList<IPackageFragment> packages=new LinkedList<IPackageFragment>();
-		
 		packages.add(dependency.getStart());
-		packages.add(dependency.getEnd());
 		
 		packagesToSearch=packages;
+	
+		packages=new LinkedList<IPackageFragment>();
+		packages.add(dependency.getEnd());
+		
+		packagesWithJElementsToSearchFor=packages;
 	}
 	
 	public LinkedList<Dependency> searchDependenciesToMethod(int searchConstant){
@@ -51,15 +61,48 @@ public class Searcher {
 		return searchDependencies(searchConstant, new LookUpType(packagesToSearch));
 	}
 	
-	public LinkedList<MatchInformation> searchDetailedDependencies(int searchConstant){
-		LookUpType lookUp=new LookUpType(packagesToSearch);
+	public LinkedList<MatchInformation> searchAllDetailedDependencies(){
+		LinkedList<MatchInformation> result=new LinkedList<MatchInformation>();
+		
+		/*
+		result.addAll(searchDetailedDependencies(IJavaSearchConstants.LOCAL_VARIABLE_DECLARATION_TYPE_REFERENCE, new LookUpType(packagesToSearch)));
+		//System.out.println("LOCAL_VARIABLE_DECLARATION_TYPE_REFERENCE found");
+		result.addAll(searchDetailedDependencies(IJavaSearchConstants.FIELD_DECLARATION_TYPE_REFERENCE, new LookUpType(packagesToSearch)));
+		//System.out.println("FIELD_DECLARATION_TYPE_REFERENCE found");
+		result.addAll(searchDetailedDependencies(IJavaSearchConstants.SUPERTYPE_TYPE_REFERENCE, new LookUpType(packagesToSearch)));
+		//System.out.println("SUPERTYPE_TYPE_REFERENCE found");
+		result.addAll(searchDetailedDependencies(IJavaSearchConstants.PARAMETER_DECLARATION_TYPE_REFERENCE, new LookUpType(packagesToSearch)));
+		//System.out.println("PARAMETER_DECLARATION_TYPE_REFERENCE found");
+		result.addAll(searchDetailedDependencies(IJavaSearchConstants.RETURN_TYPE_REFERENCE, new LookUpType(packagesToSearch)));
+		//System.out.println("RETURN_TYPE_REFERENCE found");
+		result.addAll(searchDetailedDependencies(IJavaSearchConstants.IMPORT_DECLARATION_TYPE_REFERENCE, new LookUpType(packagesToSearch)));
+		//System.out.println("IMPORT_DECLARATION_TYPE_REFERENCE found");
+		result.addAll(searchDetailedDependencies(IJavaSearchConstants.METHOD, new LookUpMethod(packagesToSearch)));
+		//System.out.println("METHOD found");
+		*/
+		result.addAll(searchDetailedDependencies(IJavaSearchConstants.REFERENCES, new LookUpType(packagesWithJElementsToSearchFor)));
+		//System.out.println("LOCAL_VARIABLE_DECLARATION_TYPE_REFERENCE found");
+		result.addAll(searchDetailedDependencies(IJavaSearchConstants.REFERENCES, new LookUpMethod(packagesWithJElementsToSearchFor)));
+		//System.out.println("LOCAL_VARIABLE_DECLARATION_TYPE_REFERENCE found");
+		
+		
+		
+		//result.addAll(searchDetailedDependencies(IJavaSearchConstants.SUPERTYPE_TYPE_REFERENCE, new LookUpType(packagesToSearch)));
+		
+		
+		//result.addAll(searchDetailedDependencies(IJavaSearchConstants.REFERENCES, new LookUpMethod(packagesToSearch)));
+		
+		return result;
+	}
+	
+	private LinkedList<MatchInformation> searchDetailedDependencies(int searchConstant,LookUpInterface lookUp){
+		assert lookUp!=null;
 		
 		LinkedList<MatchInformation> result=new LinkedList<MatchInformation>();
 		LinkedList<IJavaElement> allElement=lookUp.getAllJElements();
 
-		
 		try {
-			for (IPackageFragment pack : lookUp.getPackages()){
+			for (IPackageFragment pack : packagesToSearch){
 			    // check each method.
 				for (IJavaElement jEle : allElement) {
 					
@@ -75,7 +118,7 @@ public class Searcher {
 					    IJavaSearchScope scope = SearchEngine.createJavaSearchScope(new IJavaElement[] {pack});
 								  
 					    //create requestor
-					    SearchRequestorMethodDeclarations requestor=new SearchRequestorMethodDeclarations();
+					    SearchRequestorMatchInformation requestor=new SearchRequestorMatchInformation(pattern);
 					        	  
 					    JDTSearchProvider.search(pattern, new SearchParticipant[] {SearchEngine.getDefaultSearchParticipant()}, scope, requestor, null);
 					        	 
@@ -142,19 +185,25 @@ public class Searcher {
 		return result;
 	}
 	
-	private IPackageFragmentRoot getSrcFolder(IJavaProject jProj){
+	private LinkedList<IPackageFragmentRoot> getSrcFolders(IJavaProject jProj){
 		//get folders&archives
 		LinkedList<IPackageFragmentRoot> packFragRoots=getPackageFragmentRoots(jProj);
 				
 		//determine folders to search -> src for now
-		IPackageFragmentRoot folderToSearch = null;
+		LinkedList<IPackageFragmentRoot> foldersToSearch = new LinkedList<IPackageFragmentRoot>();
 		for (IPackageFragmentRoot folder:packFragRoots){
-			if (folder.getElementName().equals("src")&&!folder.isArchive()){
-				folderToSearch=folder;
-				System.out.println("src folder found");
+			//if (folder.getElementName().equals("src")&&!folder.isArchive()){
+			try {
+				if (folder.getKind()==folder.K_SOURCE&&!folder.isArchive()){	
+					foldersToSearch.add(folder);
+					System.out.println("src folder found");
+				}
+			} catch (JavaModelException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
 		}
-		return folderToSearch;
+		return foldersToSearch;
 	}
 	
 	private LinkedList<IPackageFragment> getPackageFragments(IPackageFragmentRoot sourceToSearch){
