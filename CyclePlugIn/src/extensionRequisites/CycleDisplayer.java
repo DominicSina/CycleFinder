@@ -12,11 +12,14 @@ import org.eclipse.jdt.ui.JavaUI;
 import org.eclipse.jface.viewers.ColumnLabelProvider;
 import org.eclipse.jface.viewers.TreeNode;
 import org.eclipse.jface.viewers.TreeNodeContentProvider;
+import org.eclipse.jface.viewers.TreePath;
 import org.eclipse.jface.viewers.TreeViewer;
 import org.eclipse.jface.viewers.TreeViewerColumn;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
+import org.eclipse.swt.events.TreeAdapter;
+import org.eclipse.swt.events.TreeEvent;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Tree;
@@ -24,6 +27,7 @@ import org.eclipse.swt.widgets.TreeColumn;
 import org.eclipse.swt.widgets.TreeItem;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.PartInitException;
+import org.eclipse.ui.internal.handlers.WizardHandler.New;
 import org.eclipse.ui.part.ViewPart;
 import org.eclipse.ui.texteditor.ITextEditor;
 
@@ -43,6 +47,9 @@ public class CycleDisplayer extends ViewPart {
 	private TreeViewer treeViewer;
 	private Tree tree;
 	private HashMap<Dependency, LinkedList<MatchInformation>> matchInfo=new HashMap<Dependency, LinkedList<MatchInformation>>();
+	private TreeNode[] compNodeArray;
+	private static int times=0;
+	
 	
 	public CycleDisplayer() {
 		super();
@@ -88,8 +95,92 @@ public class CycleDisplayer extends ViewPart {
 				}
 			}
 		});
+	
 		
-		treeViewer.setContentProvider(new TreeNodeContentProvider());
+		tree.addTreeListener(new TreeAdapter() {
+			@Override
+			public void treeExpanded(TreeEvent e) {
+				if (((TreeNode)e.item.getData()).getValue() instanceof Dependency){//&&times==0){
+					//times++;
+					TreeNode depNode=(TreeNode)e.item.getData();
+					treeViewer.add(depNode, new TreeNode("New string"));
+					treeViewer.refresh(depNode);
+					treeViewer.update(depNode.getChildren(), null);
+					treeViewer.update(depNode, null);
+					
+					////perform detailed search on all package dependencies
+					Dependency dep=(Dependency)depNode.getValue();
+					LinkedList<MatchInformation> matchInfos;
+					//avoid doing the same searches multiple times
+					if(matchInfo.containsKey(dep)){
+						matchInfos= new LinkedList<MatchInformation>(matchInfo.get(dep));
+					}
+					else{
+						Searcher searcher=new Searcher(dep);
+						matchInfos=searcher.searchAllDetailedDependencies();
+						matchInfo.put(dep, new LinkedList<MatchInformation>(matchInfos));
+					}
+					
+					
+					////group the matches by their classes
+					//collect all classes
+					LinkedList<ICompilationUnit> classes=new LinkedList<ICompilationUnit>();
+					for(MatchInformation matchInfo : matchInfos){
+						if(!classes.contains(matchInfo.compilationUnit)){
+							classes.add(matchInfo.compilationUnit);
+						}
+					}
+					
+					TreeNode[] classNodes=new TreeNode[classes.size()];
+					for(int i=0; i<classes.size();i++){
+						classNodes[i]=new TreeNode(classes.get(i));
+					}
+					depNode.setChildren(classNodes);
+					
+					//determine which matches were found in which class
+					for(TreeNode classNode:classNodes){
+						LinkedList<MatchInformation> matchesInClass=new LinkedList<MatchInformation>();
+						
+						for(int i=0;i<matchInfos.size();i++){
+							MatchInformation matchInfo=matchInfos.get(i);
+							if(matchInfo.compilationUnit.equals((classNode.getValue()))){
+								matchesInClass.add(matchInfo);
+								matchInfos.remove(matchInfo);
+								i--;
+							}	
+						}
+						
+						TreeNode[] infoNodes=new TreeNode[matchesInClass.size()];
+						for(int i=0; i<matchesInClass.size();i++){
+							infoNodes[i]=new TreeNode(matchesInClass.get(i));
+						}
+							classNode.setChildren(infoNodes);
+					}
+					
+					
+					//treeViewer.getContentProvider().inputChanged(treeViewer, depNode, depNode);
+					//treeViewer.getContentProvider().inputChanged(treeViewer, oldInput, newInput);
+					/*treeViewer.refresh(depNode);
+					treeViewer.update(depNode.getChildren(),null);*/
+					Object[] oldExpandedElements=treeViewer.getExpandedElements();
+					Object[] newExpandedElements=new Object[oldExpandedElements.length+1];
+					
+					for(int i=0;i<oldExpandedElements.length;i++){
+						newExpandedElements[i]=oldExpandedElements[i];
+					}
+					newExpandedElements[oldExpandedElements.length]=depNode;
+					
+					sortTree(depNode.getChildren());
+					treeViewer.setInput(compNodeArray);
+					
+					treeViewer.refresh(); 
+					treeViewer.setExpandedElements(newExpandedElements); 
+				}
+			}
+		});
+		
+		TreeNodeContentProvider contentProv=new TreeNodeContentProvider();
+		treeViewer.setContentProvider(contentProv);
 				
 		// define layout for the viewer
 	    GridData gridData = new GridData();
@@ -209,6 +300,7 @@ public class CycleDisplayer extends ViewPart {
 			TreeNode node=new TreeNode(comp); 
 			compNodes.add(node);
 			
+			
 			LinkedList<Cycle> cycles=comp.findCycles();
 			TreeNode[] cycleNodes=new TreeNode[cycles.size()];
 			for(int i=0; i<cycles.size();i++){
@@ -226,6 +318,12 @@ public class CycleDisplayer extends ViewPart {
 					}
 					cycleNode.setChildren(depNodes);
 					
+					for(TreeNode depNode : cycleNode.getChildren()){
+						depNode.setChildren(new TreeNode[]{new TreeNode(new Integer(0))});
+					}
+					///////
+					///////
+					/*
 					for(TreeNode depNode : cycleNode.getChildren()){
 						
 						////perform detailed search on all package dependencies
@@ -277,19 +375,24 @@ public class CycleDisplayer extends ViewPart {
 							classNode.setChildren(infoNodes);
 						}
 					}
+					*/
+					//////
+					//////
 				}
 			}
 		}
 		
-		TreeNode[] compNodeArray=new TreeNode[compNodes.size()];
+		compNodeArray=new TreeNode[compNodes.size()];
 		for(int i=0;i<compNodes.size();i++){
 			compNodeArray[i]=compNodes.get(i);
 		}
 		
 		//display tree
+		//TODO sort is not active at the moment
 		sortTree(compNodeArray);
 		treeViewer.setInput(compNodeArray);
 		treeViewer.refresh();
+		
 	}
 	
 	/*

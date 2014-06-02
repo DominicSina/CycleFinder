@@ -1,9 +1,14 @@
 package dependencyStructures;
 
 import java.util.LinkedList;
+import java.util.List;
+import java.util.Vector;
+
+import javax.xml.crypto.NodeSetData;
 
 import org.eclipse.jdt.core.IPackageFragment;
 
+import de.normalisiert.utils.graphs.ElementaryCyclesSearch;
 import tarjan.TarjanEdge;
 import tarjan.TarjanNode;
 
@@ -24,6 +29,14 @@ public class StronglyConnectedComponent {
 		assert dependencies.size()>=2;
 		
 		this.packages=new LinkedList<IPackageFragment>(packages);
+		
+		for(int i=0; i<dependencies.size(); i++){
+			Dependency dep=dependencies.get(i);
+			if((!packages.contains(dep.getStart()))||(!packages.contains(dep.getEnd()))){
+				dependencies.remove(i);
+				i--;
+			}
+		}
 		this.dependencies=new LinkedList<>(dependencies);
 	}
 	
@@ -51,13 +64,14 @@ public class StronglyConnectedComponent {
 		return component;
 	}
 	
+	
 	/*
 	 * Returns all the cycles contained in this strongly connected component.
 	 * Uses a recursive depth-first algorithm. The recursion end when it has reached
 	 * a depth equals to the number of packages in this component(the longest cycle can't be 
 	 * longer than that). 
 	 */
-	public LinkedList<Cycle> findCycles(){
+	/*public LinkedList<Cycle> findCycles(){
 		
 		LinkedList<LinkedList<IPackageFragment>> cyclesFound=new LinkedList<LinkedList<IPackageFragment>>();
 		for (IPackageFragment pack : packages){	
@@ -70,6 +84,39 @@ public class StronglyConnectedComponent {
 		}
 		
 		return result;
+	}*/
+	
+	public LinkedList<Cycle> findCycles(){
+		
+		IPackageFragment[] packageArray=new IPackageFragment[packages.size()];
+		for(int i=0; i<packageArray.length; i++){
+			packageArray[i]=packages.get(i);
+		}
+		
+		ElementaryCyclesSearch eSearcher=new ElementaryCyclesSearch(getAdjMatrix(), packageArray);
+		List list=eSearcher.getElementaryCycles();
+		
+		LinkedList<LinkedList<IPackageFragment>> cycles = new LinkedList<LinkedList<IPackageFragment>>();
+		
+		for(Vector vec : (List<Vector<IPackageFragment>>)list){
+			cycles.add(new LinkedList<IPackageFragment>(vec));
+		}
+		
+		LinkedList<Cycle> result=new LinkedList<Cycle>();
+		for(LinkedList<IPackageFragment> cycle : cycles){
+			result.add(new Cycle(cycle));
+		}
+	
+		return result;
+	}
+	
+	private boolean[][] getAdjMatrix(){
+		boolean[][] adjMat=new boolean[packages.size()][packages.size()];
+		
+		for (Dependency dep : dependencies){
+			adjMat[packages.indexOf(dep.getStart())][packages.indexOf(dep.getEnd())]=true;
+		}
+		return adjMat;
 	}
 	
 	/*

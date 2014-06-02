@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.IPackageFragment;
@@ -14,6 +15,7 @@ import org.eclipse.jdt.core.search.IJavaSearchScope;
 import org.eclipse.jdt.core.search.SearchEngine;
 import org.eclipse.jdt.core.search.SearchParticipant;
 import org.eclipse.jdt.core.search.SearchPattern;
+
 import searchHelper.SearchRequestorMatchInformation.MatchInformation;
 import dependencyStructures.Dependency;
 
@@ -29,6 +31,9 @@ public class Searcher {
 	private LinkedList<IPackageFragment> packagesToSearchFrom;
 	private SearchEngine JDTSearchProvider=new SearchEngine();
 	
+	private LookUpInterface typeLookUp;
+	private LookUpInterface methodLookUp;
+	
 	/*
 	 * Builds packagesToSearch and packagesToSearchFrom based on an IJavaProject.
 	 */
@@ -43,6 +48,8 @@ public class Searcher {
 		this.packagesToSearch=packagesToSearch;
 		this.packagesToSearchFrom=packagesToSearch;
 		
+		this.typeLookUp=new LookUpType(packagesToSearchFrom);
+		this.methodLookUp=new LookUpMethod(packagesToSearchFrom);
 	}
 
 	/*
@@ -60,6 +67,9 @@ public class Searcher {
 		packages.add(dependency.getEnd());
 		
 		packagesToSearchFrom=packages;
+		
+		this.typeLookUp=new LookUpType(packagesToSearchFrom);
+		this.methodLookUp=new LookUpMethod(packagesToSearchFrom);
 	}
 	
 	/*
@@ -67,7 +77,7 @@ public class Searcher {
 	 * searchConstant: use IJavaSearchConstants here
 	 */
 	public LinkedList<Dependency> searchDependenciesToMethod(int searchConstant){
-		return searchDependencies(searchConstant, new LookUpMethod(packagesToSearchFrom));
+		return searchDependencies(searchConstant, methodLookUp);
 	}
 
 	/*
@@ -75,7 +85,7 @@ public class Searcher {
 	 * searchConstant: use IJavaSearchConstants here
 	 */
 	public LinkedList<Dependency> searchDependenciesToType(int searchConstant){
-		return searchDependencies(searchConstant, new LookUpType(packagesToSearchFrom));
+		return searchDependencies(searchConstant, typeLookUp);
 	}
 	
 	/*
@@ -86,8 +96,8 @@ public class Searcher {
 	public LinkedList<MatchInformation> searchAllDetailedDependencies(){
 		LinkedList<MatchInformation> result=new LinkedList<MatchInformation>();
 		
-		result.addAll(searchDetailedDependencies(IJavaSearchConstants.REFERENCES, new LookUpType(packagesToSearchFrom)));
-		result.addAll(searchDetailedDependencies(IJavaSearchConstants.REFERENCES, new LookUpMethod(packagesToSearchFrom)));
+		result.addAll(searchDetailedDependencies(IJavaSearchConstants.REFERENCES, typeLookUp));
+		result.addAll(searchDetailedDependencies(IJavaSearchConstants.REFERENCES, methodLookUp));
 		
 		return result;
 	}
@@ -136,6 +146,9 @@ public class Searcher {
 	/*
 	 * Searches all IJavaElements contained in lookUp in packagesToSearch.
 	 * Uses searchConstant (use IJavaSearchConstants) as limiter for what to search.
+	 * Only gives a superficial result without determining what exactly creates the
+	 * dependency but is a bit faster because it only checks the ImportContainers of the 
+	 * ICompilationUnits.
 	 * Returns a LinkedList with Dependencies
 	 */
 	private LinkedList<Dependency> searchDependencies(int searchConstant, LookUpInterface lookUp){
@@ -153,10 +166,21 @@ public class Searcher {
 						// Finds the references of the method
 					    // Create search pattern
 					    SearchPattern pattern = SearchPattern.createPattern(jEle, searchConstant);
-					       
-					    // Create search scope	
-					    IJavaSearchScope scope = SearchEngine.createJavaSearchScope(new IJavaElement[] {pack});
-								  
+					
+					    // Create search scope, only include the ImportContainers of each ICompilationUnit	
+					    LinkedList<IJavaElement> importContainers=new LinkedList<IJavaElement>();
+					    for(ICompilationUnit cUnit : pack.getCompilationUnits()){
+					    	if(cUnit.getImportContainer()!=null){
+					    		importContainers.add(cUnit.getImportContainer());
+					    	}
+					    }
+					    
+					    IJavaElement[] importContainerArray=new IJavaElement[importContainers.size()];
+					    for(int i=0;i<importContainers.size();i++){
+					    	importContainerArray[i]=importContainers.get(i);
+					    }
+					    IJavaSearchScope scope = SearchEngine.createJavaSearchScope(importContainerArray);
+					    
 					    //create requestor
 					    SearchRequestorMatchFound requestor=new SearchRequestorMatchFound();
 					        	  
@@ -207,7 +231,6 @@ public class Searcher {
 			try {
 				if (folder.getKind()==IPackageFragmentRoot.K_SOURCE&&!folder.isArchive()){	
 					foldersToSearch.add(folder);
-					System.out.println("src folder found");
 				}
 			} catch (JavaModelException e) {
 				// TODO Auto-generated catch block

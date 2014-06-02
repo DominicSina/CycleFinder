@@ -206,7 +206,7 @@ public class SearchRequestorMatchInformation extends SearchRequestor{
 						}
 					}
 					//check if superclass caused the match
-					if(typeFrom.getSuperclassName().equals(typeTo.getElementName())){
+					if(typeFrom.getSuperclassName()!=null&&typeFrom.getSuperclassName().equals(typeTo.getElementName())){
 						this.matchType="Inheritance reference";
 						this.fromDescription=typeFrom.getFullyQualifiedName('.');
 						this.toDescription=typeTo.getFullyQualifiedName('.');
@@ -220,11 +220,18 @@ public class SearchRequestorMatchInformation extends SearchRequestor{
 			//case 3: from is a field
 			if(from.getElementType()==IJavaElement.FIELD&&this.matchType.equals("")){
 				IField field=(IField)from;
-				IType type=(IType)to;//can only be a type most likely if the match was created in a field
+				if (to.getElementType()==IJavaElement.TYPE){
+					IType type=(IType)to;//can only be a type most likely if the match was created in a field
+					this.matchType="Field reference";
+					this.fromDescription=compUnit.getParent().getElementName()+"."+compUnit.getElementName().substring(0, compUnit.getElementName().length()-5)+"."+field.getElementName();
+					this.toDescription=type.getFullyQualifiedName('.');
 				
-				this.matchType="Field reference";
-				this.fromDescription=compUnit.getParent().getElementName()+"."+compUnit.getElementName().substring(0, compUnit.getElementName().length()-5)+"."+field.getElementName();
-				this.toDescription=type.getFullyQualifiedName('.');
+				}
+				else{
+					this.matchType="Unknown Field reference";
+					this.fromDescription=compUnit.getParent().getElementName()+"."+compUnit.getElementName().substring(0, compUnit.getElementName().length()-5)+"."+field.getElementName();
+					this.toDescription=to.getElementName();
+				}
 			}
 			
 			//case 4: from is an import declaration
