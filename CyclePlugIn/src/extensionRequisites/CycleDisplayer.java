@@ -8,11 +8,17 @@ import java.util.LinkedList;
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.internal.ui.compare.ResizableDialog;
+import org.eclipse.jdt.internal.ui.text.java.SWTTemplateCompletionProposalComputer;
 import org.eclipse.jdt.ui.JavaUI;
 import org.eclipse.jface.viewers.ColumnLabelProvider;
+import org.eclipse.jface.viewers.IContentProvider;
+import org.eclipse.jface.viewers.ITreeContentProvider;
+import org.eclipse.jface.viewers.ITreeSelection;
 import org.eclipse.jface.viewers.TreeNode;
 import org.eclipse.jface.viewers.TreeNodeContentProvider;
 import org.eclipse.jface.viewers.TreePath;
+import org.eclipse.jface.viewers.TreeSelection;
 import org.eclipse.jface.viewers.TreeViewer;
 import org.eclipse.jface.viewers.TreeViewerColumn;
 import org.eclipse.swt.SWT;
@@ -20,6 +26,7 @@ import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.events.TreeAdapter;
 import org.eclipse.swt.events.TreeEvent;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Tree;
@@ -48,9 +55,7 @@ public class CycleDisplayer extends ViewPart {
 	private Tree tree;
 	private HashMap<Dependency, LinkedList<MatchInformation>> matchInfo=new HashMap<Dependency, LinkedList<MatchInformation>>();
 	private TreeNode[] compNodeArray;
-	private static int times=0;
-	
-	
+
 	public CycleDisplayer() {
 		super();
 	}
@@ -96,17 +101,13 @@ public class CycleDisplayer extends ViewPart {
 			}
 		});
 	
-		
+		//add listener that replaces the children of the TreeNodes containing a dependency with their
+		//real children when they are expanded. Needs to perform a detailed search to do this.
 		tree.addTreeListener(new TreeAdapter() {
 			@Override
 			public void treeExpanded(TreeEvent e) {
-				if (((TreeNode)e.item.getData()).getValue() instanceof Dependency){//&&times==0){
-					//times++;
+				if (((TreeNode)e.item.getData()).getValue() instanceof Dependency){
 					TreeNode depNode=(TreeNode)e.item.getData();
-					treeViewer.add(depNode, new TreeNode("New string"));
-					treeViewer.refresh(depNode);
-					treeViewer.update(depNode.getChildren(), null);
-					treeViewer.update(depNode, null);
 					
 					////perform detailed search on all package dependencies
 					Dependency dep=(Dependency)depNode.getValue();
@@ -123,7 +124,7 @@ public class CycleDisplayer extends ViewPart {
 					
 					
 					////group the matches by their classes
-					//collect all classes
+					//collect all classes and assign them as children
 					LinkedList<ICompilationUnit> classes=new LinkedList<ICompilationUnit>();
 					for(MatchInformation matchInfo : matchInfos){
 						if(!classes.contains(matchInfo.compilationUnit)){
@@ -137,7 +138,7 @@ public class CycleDisplayer extends ViewPart {
 					}
 					depNode.setChildren(classNodes);
 					
-					//determine which matches were found in which class
+					//determine which matches were found in which class and assign them as children
 					for(TreeNode classNode:classNodes){
 						LinkedList<MatchInformation> matchesInClass=new LinkedList<MatchInformation>();
 						
@@ -157,24 +158,23 @@ public class CycleDisplayer extends ViewPart {
 							classNode.setChildren(infoNodes);
 					}
 					
-					
-					//treeViewer.getContentProvider().inputChanged(treeViewer, depNode, depNode);
-					//treeViewer.getContentProvider().inputChanged(treeViewer, oldInput, newInput);
-					/*treeViewer.refresh(depNode);
-					treeViewer.update(depNode.getChildren(),null);*/
-					Object[] oldExpandedElements=treeViewer.getExpandedElements();
-					Object[] newExpandedElements=new Object[oldExpandedElements.length+1];
-					
-					for(int i=0;i<oldExpandedElements.length;i++){
-						newExpandedElements[i]=oldExpandedElements[i];
-					}
-					newExpandedElements[oldExpandedElements.length]=depNode;
-					
 					sortTree(depNode.getChildren());
-					treeViewer.setInput(compNodeArray);
 					
+					TreeItem item=(TreeItem)e.item;
+					TreePath path=buildTreePath(item);
+					
+					TreePath[] oldExpandedPaths=treeViewer.getExpandedTreePaths();
+					TreePath[] newExpandedPaths=new TreePath[oldExpandedPaths.length+1];
+					for(int i=0; i<oldExpandedPaths.length; i++){
+						newExpandedPaths[i]=oldExpandedPaths[i];
+					}
+					newExpandedPaths[newExpandedPaths.length-1]=path;
+					
+					treeViewer.setInput(compNodeArray);
 					treeViewer.refresh(); 
-					treeViewer.setExpandedElements(newExpandedElements); 
+					treeViewer.setExpandedTreePaths(newExpandedPaths);
+					treeViewer.getTree().setTopItem(findItemByPath(path));
+					treeViewer.getTree().redraw();//hopefully fixes the no scrollbar problem
 				}
 			}
 		});
@@ -192,6 +192,68 @@ public class CycleDisplayer extends ViewPart {
 	    treeViewer.getControl().setLayoutData(gridData);
 	    
 	    treeViewer.refresh();
+	}
+	
+	/*
+	 * Traverses the tree from item upwards until it reaches a
+	 * TreeItem that contains a TreeNode that contains a StronglyConnectedComponent.
+	 * =>needs a tree that contains TreeNodes in its TreeItems.
+	 * =>the TreeNodes in the root TreeItems need to contain StronglyConnectedComponents
+	 */
+	private TreePath buildTreePath(TreeItem item){
+		assert item!=null;
+			
+		LinkedList<TreeNode> segmentList=new LinkedList<TreeNode>();
+		segmentList.add((TreeNode)item.getData());
+		while(!(((TreeNode)item.getData()).getValue() instanceof StronglyConnectedComponent)){
+			item=item.getParentItem();
+			segmentList.add((TreeNode)item.getData());
+		}
+		
+		//reverse segmentList and put it into an array
+		TreeNode[] segments=new TreeNode[segmentList.size()];
+		for(int i=0; i<segmentList.size(); i++){
+			segments[i]=segmentList.get(segmentList.size()-1-i);
+		}
+		
+		return new TreePath(segments);
+	}
+	
+	/*
+	 * Searches the tree along a path and returns
+	 * the TreeItem at the end of this path. 
+	 * returns null if the path is invalid
+	 */
+	private TreeItem findItemByPath(TreePath path){
+		assert path!=null;
+		assert path.getSegmentCount()>0;
+		
+		TreeItem[] itemsToSearchThrough=treeViewer.getTree().getItems();
+		
+		TreeItem temporaryResult=null;
+		for(int segmentIndex=0; segmentIndex<path.getSegmentCount(); segmentIndex++){
+			TreeNode nodeToFind=(TreeNode)path.getSegment(segmentIndex);
+			
+			boolean foundItem=false;
+			int itemIndex=0;
+			while(!foundItem){
+				if(itemIndex<itemsToSearchThrough.length){
+					if(itemsToSearchThrough[itemIndex].getData().equals(nodeToFind)){
+						foundItem=true;
+						temporaryResult=itemsToSearchThrough[itemIndex];
+					}
+					itemIndex++;
+				}
+				else{
+					//path invalid, item could not be found
+					return null;
+				}
+			}
+			
+			itemsToSearchThrough=temporaryResult.getItems();
+		}
+		
+		return temporaryResult;
 	}
 	
 	/*
@@ -222,6 +284,18 @@ public class CycleDisplayer extends ViewPart {
 			  //display filename if node.getValue is an ICompilationUnit
 			  if(nodeElement instanceof ICompilationUnit)
 				  return ((ICompilationUnit)nodeElement).getElementName();
+			  
+			  if(nodeElement instanceof StronglyConnectedComponent){
+				  StronglyConnectedComponent ssc=((StronglyConnectedComponent)nodeElement);
+				  String packageNames=ssc.getPackageNames();
+				  return(nodeElement.toString())+"\n"+packageNames.substring(1, packageNames.length()-1).replaceAll(", ", "\n");
+			  }
+			  if(nodeElement instanceof Cycle){
+				  Cycle cycle=((Cycle)nodeElement);
+				  String packageNames=cycle.getPackageNames();
+				  
+				  return(nodeElement.toString())+"\n"+packageNames.substring(1, packageNames.length()-1).replaceAll(", ", "\n");
+			  }
 			  
 			  return nodeElement.toString();
 		  }
@@ -318,66 +392,12 @@ public class CycleDisplayer extends ViewPart {
 					}
 					cycleNode.setChildren(depNodes);
 					
+					//assign one child to each TreeNode with a dependency so that
+					//the TreeNode is expandable. Place error message in case replacement
+					//of this node did not work.
 					for(TreeNode depNode : cycleNode.getChildren()){
-						depNode.setChildren(new TreeNode[]{new TreeNode(new Integer(0))});
+						depNode.setChildren(new TreeNode[]{new TreeNode(new String("Error, try expanding again"))});
 					}
-					///////
-					///////
-					/*
-					for(TreeNode depNode : cycleNode.getChildren()){
-						
-						////perform detailed search on all package dependencies
-						Dependency dep=(Dependency)depNode.getValue();
-						LinkedList<MatchInformation> matchInfos;
-						//avoid doing the same searches multiple times
-						if(matchInfo.containsKey(dep)){
-							matchInfos= new LinkedList<MatchInformation>(matchInfo.get(dep));
-						}
-						else{
-							Searcher searcher=new Searcher(dep);
-							matchInfos=searcher.searchAllDetailedDependencies();
-							matchInfo.put(dep, new LinkedList<MatchInformation>(matchInfos));
-						}
-						
-						
-						////group the matches by their classes
-						//collect all classes
-						LinkedList<ICompilationUnit> classes=new LinkedList<ICompilationUnit>();
-						for(MatchInformation matchInfo : matchInfos){
-							if(!classes.contains(matchInfo.compilationUnit)){
-								classes.add(matchInfo.compilationUnit);
-							}
-						}
-						
-						TreeNode[] classNodes=new TreeNode[classes.size()];
-						for(int i=0; i<classes.size();i++){
-							classNodes[i]=new TreeNode(classes.get(i));
-						}
-						depNode.setChildren(classNodes);
-						
-						//determine which matches were found in which class
-						for(TreeNode classNode:classNodes){
-							LinkedList<MatchInformation> matchesInClass=new LinkedList<MatchInformation>();
-							
-							for(int i=0;i<matchInfos.size();i++){
-								MatchInformation matchInfo=matchInfos.get(i);
-								if(matchInfo.compilationUnit.equals((classNode.getValue()))){
-									matchesInClass.add(matchInfo);
-									matchInfos.remove(matchInfo);
-									i--;
-								}	
-							}
-							
-							TreeNode[] infoNodes=new TreeNode[matchesInClass.size()];
-							for(int i=0; i<matchesInClass.size();i++){
-								infoNodes[i]=new TreeNode(matchesInClass.get(i));
-							}
-							classNode.setChildren(infoNodes);
-						}
-					}
-					*/
-					//////
-					//////
 				}
 			}
 		}
@@ -388,7 +408,6 @@ public class CycleDisplayer extends ViewPart {
 		}
 		
 		//display tree
-		//TODO sort is not active at the moment
 		sortTree(compNodeArray);
 		treeViewer.setInput(compNodeArray);
 		treeViewer.refresh();

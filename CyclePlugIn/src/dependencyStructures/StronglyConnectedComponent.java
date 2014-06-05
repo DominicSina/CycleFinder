@@ -4,8 +4,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Vector;
 
-import javax.xml.crypto.NodeSetData;
-
 import org.eclipse.jdt.core.IPackageFragment;
 
 import de.normalisiert.utils.graphs.ElementaryCyclesSearch;
@@ -64,28 +62,6 @@ public class StronglyConnectedComponent {
 		return component;
 	}
 	
-	
-	/*
-	 * Returns all the cycles contained in this strongly connected component.
-	 * Uses a recursive depth-first algorithm. The recursion end when it has reached
-	 * a depth equals to the number of packages in this component(the longest cycle can't be 
-	 * longer than that). 
-	 */
-	/*public LinkedList<Cycle> findCycles(){
-		
-		LinkedList<LinkedList<IPackageFragment>> cyclesFound=new LinkedList<LinkedList<IPackageFragment>>();
-		for (IPackageFragment pack : packages){	
-			findCycle(cyclesFound, pack, pack, new LinkedList<IPackageFragment>(), 0, packages.size());
-		}
-		
-		LinkedList<Cycle> result=new LinkedList<Cycle>();
-		for(LinkedList<IPackageFragment> cycleList : cyclesFound){
-			result.add(new Cycle(cycleList));
-		}
-		
-		return result;
-	}*/
-	
 	public LinkedList<Cycle> findCycles(){
 		
 		IPackageFragment[] packageArray=new IPackageFragment[packages.size()];
@@ -110,6 +86,9 @@ public class StronglyConnectedComponent {
 		return result;
 	}
 	
+	/*
+	 * Compute adjacency matrix
+	 */
 	private boolean[][] getAdjMatrix(){
 		boolean[][] adjMat=new boolean[packages.size()][packages.size()];
 		
@@ -118,41 +97,7 @@ public class StronglyConnectedComponent {
 		}
 		return adjMat;
 	}
-	
-	/*
-	 * Recursive part of the cycle finding algorithm
-	 */
-	private void findCycle(LinkedList<LinkedList<IPackageFragment>> result, IPackageFragment startingPackage, IPackageFragment currentPackage, LinkedList<IPackageFragment> visitedPackages, int deapth, int maxDeapth){
-		assert startingPackage!=null;
-		assert visitedPackages!=null;
-		assert result!=null;
 		
-		//possible new cycle found
-		if (currentPackage==startingPackage&&visitedPackages.size()>0){
-			boolean foundMatchingCycle=false;
-			for(LinkedList<IPackageFragment> detectedCycle : result){
-				if (detectedCycle.containsAll(visitedPackages)&&visitedPackages.containsAll(detectedCycle)){
-					foundMatchingCycle=true;
-				}
-			}
-			if(foundMatchingCycle==false){
-				//cycle indeed was new
-				result.add(visitedPackages);
-			}
-		}
-		else if(visitedPackages.contains(currentPackage)||deapth>=maxDeapth){
-			//end of recursion;
-		}
-		else{
-			LinkedList<Dependency> outgoingEdges=findDependenciesStartingWithPackage(currentPackage);
-			for(Dependency edge : outgoingEdges){
-				LinkedList<IPackageFragment> visitedNodesNew=new LinkedList<IPackageFragment>(visitedPackages);
-				visitedNodesNew.add(currentPackage);
-				findCycle(result, startingPackage, edge.getEnd(), visitedNodesNew, deapth+1, maxDeapth);
-			}
-		}
-	}
-	
 	/*
 	 * returns a list with all the dependencies that start with IPackageFragment pack that are 
 	 * contained in this strongly connected component
@@ -178,7 +123,7 @@ public class StronglyConnectedComponent {
 	 * returns package names in curved brackets
 	 * separated with commas
 	 */
-	private String getPackageNames(){
+	public String getPackageNames(){
 		String packageNames="{";
 		packageNames+=packages.get(0).getElementName();
 		for(int i=1; i<packages.size();i++){

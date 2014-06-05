@@ -34,7 +34,7 @@ public class Cycle {
 	 * returns package names in curved brackets
 	 * separated with commas
 	 */
-	private String getPackageNames(){
+	public String getPackageNames(){
 		//get packagenames
 		String packageNames="{";
 		packageNames+=packages.get(0).getElementName();

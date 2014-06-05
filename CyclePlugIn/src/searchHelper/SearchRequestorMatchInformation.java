@@ -164,6 +164,16 @@ public class SearchRequestorMatchInformation extends SearchRequestor{
 							this.toDescription=type.getFullyQualifiedName('.');
 						}
 						
+						/*
+						//check if it was a constructor reference
+						String shouldbeNew=compUnit.getSource().substring(offset-4, offset-1);
+						char char1=compUnit.getSource().charAt(offset+length+1);
+						if(shouldbeNew.equals("new")&&char1=='('){
+							this.matchType="toRemove";
+							this.fromDescription=compUnit.getParent().getElementName()+"."+compUnit.getElementName().substring(0, compUnit.getElementName().length()-5)+"."+method.getElementName()+paramSignature;
+							this.toDescription=type.getFullyQualifiedName('.');
+						}*/
+						
 						//if none of the above, it has to be a local type reference inside the method
 						if(this.matchType.equals("")){
 							this.matchType="Local Type reference";

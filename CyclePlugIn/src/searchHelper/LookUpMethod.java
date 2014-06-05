@@ -41,8 +41,10 @@ public class LookUpMethod extends LookUp {
 					     
 					     // add each method.
 					     for (IMethod method : methodList) {
-					    	 this.add(method, pack);
-					     }
+					    	 if(!method.isConstructor()){
+					    		 this.add(method, pack);
+					    	 }
+					    }
 					}
 				}		
 			}
